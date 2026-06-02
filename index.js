@@ -2,6 +2,7 @@ const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
 const path = require('path');
+const os = require('os');
 require('dotenv').config();
 
 const User = require('./models/User');
@@ -31,18 +32,29 @@ console.log('   POST /api/orders/:id/payment');
 console.log('   GET  /api/orders');
 console.log('   POST /api/orders');
 
+// Ensure concurrency defaults are explicit for deployed instances
+const WEB_CONCURRENCY = process.env.WEB_CONCURRENCY || '1';
+process.env.WEB_CONCURRENCY = WEB_CONCURRENCY;
+console.log(`⚙️  WEB_CONCURRENCY=${WEB_CONCURRENCY} (CPUs: ${os.cpus().length})`);
+
 // Connect to MongoDB and Initialize Database
-const MONGODB_URI = process.env.MONGODB_URI || 'mongodb+srv://nayanamotagi24_db_user:M8IZrPAcRUR92UWj@cluster0.rlrtdph.mongodb.net/ecommerce?appName=Cluster0';
+const DEFAULT_LOCAL_MONGODB_URI = 'mongodb://127.0.0.1:27017/ecommerce';
+const MONGODB_URI = process.env.MONGODB_URI || DEFAULT_LOCAL_MONGODB_URI;
+
+if (!process.env.MONGODB_URI && process.env.NODE_ENV === 'production') {
+  console.error('❌ MONGODB_URI is required in production. Set it in your environment variables.');
+  process.exit(1);
+}
 
 const initializeDatabase = async () => {
   try {
     // Connect to MongoDB
     await mongoose.connect(MONGODB_URI);
-    
+
     console.log('✅ MongoDB Connected Successfully');
     console.log(`📊 Database: ${mongoose.connection.name}`);
     console.log(`🔗 Host: ${mongoose.connection.host}`);
-    
+
     // Verify database connection
     const dbState = mongoose.connection.readyState;
     const states = {
@@ -52,7 +64,7 @@ const initializeDatabase = async () => {
       3: 'disconnecting'
     };
     console.log(`📡 Connection State: ${states[dbState]}`);
-    
+
     // Create default admin user if it doesn't exist
     const adminExists = await User.findOne({ role: 'admin', email: 'admin@ecommerce.com' });
     if (!adminExists) {
@@ -70,14 +82,14 @@ const initializeDatabase = async () => {
     } else {
       console.log('✅ Admin user already exists');
     }
-    
+
     // List all collections
     const collections = await mongoose.connection.db.listCollections().toArray();
     console.log(`📚 Collections in database: ${collections.length}`);
     collections.forEach(col => {
       console.log(`   - ${col.name}`);
     });
-    
+
   } catch (error) {
     console.error('❌ MongoDB connection error:', error);
     process.exit(1);
